@@ -1,5 +1,5 @@
 import { db } from "../config/firebase.config"
-import { compareValue, hashValue } from "../util/bcrypt"
+import { compareValue, hashValue } from "../utils/bcrypt"
 
 
 export interface User {

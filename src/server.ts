@@ -4,7 +4,7 @@ import cors from "cors";
 import { configs } from "./config";
 import cookieParser from "cookie-parser";
 import errorHandler from "./middleware/errorHandler";
-import catchError from "./util/catchError";
+import catchError from "./utils/catchError";
 import { OK } from "./config/http";
 import authRoutes from "./routers/auth.router";
 

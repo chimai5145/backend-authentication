@@ -1,5 +1,5 @@
 import { z } from "zod";
-import catchError from "../util/catchError";
+import catchError from "../utils/catchError";
 
 const registerSchema = z.object({
     email: z.string().email().min(5).max(255),
