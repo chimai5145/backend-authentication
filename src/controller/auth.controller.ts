@@ -1,5 +1,7 @@
 import { z } from "zod";
+import { Request, Response } from "express";
 import catchError from "../utils/catchError";
+import { createAccount } from "../services";
 
 const registerSchema = z.object({
     email: z.string().email().min(5).max(255),
@@ -12,15 +14,16 @@ const registerSchema = z.object({
     path: ["confirmPassword"]
 });
 
-
-export const registerHandler = catchError(async (req, res) => {
+export const registerHandler = catchError(async (req: Request, res: Response) => {
     // Validate request
     const request = registerSchema.parse({
         ...req.body,
         userAgent: req.headers["user-agent"]
-    })
-    // Call service
+    });
 
-    // Return respond
-}
-)
+    // Call service
+    const result = await createAccount(request);
+
+    // Return response
+    res.json(result);
+});

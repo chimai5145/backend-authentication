@@ -1,5 +1,5 @@
 import "dotenv/config";
-import express from "express";
+import express, { Request, Response, NextFunction } from "express";
 import cors from "cors";
 import { configs } from "./config";
 import cookieParser from "cookie-parser";
@@ -7,7 +7,6 @@ import errorHandler from "./middleware/errorHandler";
 import catchError from "./utils/catchError";
 import { OK } from "./config/http";
 import authRoutes from "./routers/auth.router";
-
 
 const app = express();
 const PORT = process.env.PORT;
@@ -22,12 +21,11 @@ app.use(
 );
 app.use(cookieParser());
 
-app.get("/", catchError(async (_req, res, next) => {
+app.get("/", catchError(async (_req: Request, res: Response, next: NextFunction) => {
     // throw new Error("This is a test error");
     res.status(OK).json({
         status: "healthy"
     });
-
 }));
 
 // Auth

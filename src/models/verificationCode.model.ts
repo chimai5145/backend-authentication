@@ -1,139 +1,128 @@
 import createHttpError from "http-errors";
-import { rtdb } from "../config/firebase.config";
+import { supabase } from "../config/supabase.config";
 import VerificationCodeType from "../config/verificationCode.config";
 import { INTERNAL_SERVER_ERROR } from "../config/http";
 
-
 export interface VerificationCode {
-    userId: string,
-    type: VerificationCodeType,
-    createdAt: string,
-    expiredAt: string
+    id: string;
+    user_id: string;
+    type: VerificationCodeType;
+    created_at: string;
+    expired_at: string;
 }
 
-// Create a verifycation code
-export const create = async (
+// Create a verification code
+export const createVerificationCode = async (
     userId: string,
     type: VerificationCodeType,
-    expireMinutes: number = 30)
-    : Promise<string> => {
+    expireMinutes: number = 30
+): Promise<string> => {
     try {
         const now = new Date();
-        const expireTime = new Date(now.getTime() + expireMinutes * 60000)
+        const expireTime = new Date(now.getTime() + expireMinutes * 60000);
 
-        const verificationCode: VerificationCode = {
-            userId,
+        const verificationCode = {
+            user_id: userId,
             type,
-            createdAt: now.toISOString(),
-            expiredAt: expireTime.toISOString()
-        }
+            created_at: now.toISOString(),
+            expired_at: expireTime.toISOString()
+        };
 
-        // Generate unique key
-        // push() generate unique key base on timestamp and random value
-        const codeRef = rtdb.ref("verification_codes").push();
-        const codeId = codeRef.key || `manual_${Date.now()}_${Math.random().toString(36).substring(2, 15)}`;
+        // supabase returns an object with data and error
+        const { data, error } = await supabase
+            .from('verification_codes')
+            .insert(verificationCode)
+            .select()
+            .single();
 
-        await codeRef.set(verificationCode)
-        return codeId
+        
+        return data.id;
     } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to created verification code: ${error}`)
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to create verification code: ${error}`);
     }
-}
+};
 
-// Get verifycation code by ID
-export const getById = async (userId: string): Promise<VerificationCode | null> => {
+// Get verification code by ID
+export const getById = async (codeId: string): Promise<VerificationCode | null> => {
     try {
-        const snapshot = await rtdb.ref(`verification_codes/${userId}`).once(`value`)
+        const { data, error } = await supabase
+            .from('verification_codes') // table name
+            .select('*') // select all columns
+            .eq('id', codeId) // where id equals codeId
+            .single(); // return a single object
 
-        if (!snapshot.exists) return null;
-
-        return snapshot.val() as VerificationCode;
+        
+        return data;
     } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to get verification code: ${error}`)
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to get verification code: ${error}`);
     }
-}
+};
 
-// Get all verification code
-export const getAll = async (userId: string, type: VerificationCodeType): Promise<{ [key: string]: VerificationCode }> => {
+// Get all verification codes for a user
+// firebase: return an objecct where each key = record id
+// supabase: return an array of records
+export const getAllVerificationCodes = async (userId: string, type: VerificationCodeType): Promise<VerificationCode[]> => {
     try {
-        const snapshot = await rtdb.ref(`verification_codes/${userId}`)
-            .orderByChild("userId")
-            .equalTo(userId)
-            .once("value")
+        const { data, error } = await supabase
+            .from('verification_codes') // table name
+            .select('*') // select all columns
+            .eq('user_id', userId) // where user_id equals userId
+            .eq('type', type); // where type equals type
 
-        if (!snapshot.exists) return {};
-
-        const verificationCodes = snapshot.val();
-
-        const result: { [key: string]: VerificationCode } = {};
-        Object.keys(verificationCodes).forEach(key => {
-            if (verificationCodes[key].type === type) {
-                result[key] = verificationCodes[key];
-            }
-        })
-        return result;
+        
+        return data || [];
     } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to get verification codes: ${error}`)
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to get verification codes: ${error}`);
     }
-}
+};
 
 // Check if valid
-export const validate = async (codeId: string): Promise<boolean> => {
+export const validateVerificationCode = async (codeId: string): Promise<boolean> => {
     try {
         const code = await getById(codeId);
-
         if (!code) return false;
 
-        const expireTime = new Date(code.expiredAt);
-        return expireTime > new Date;
+        const expireTime = new Date(code.expired_at);
+        return expireTime > new Date();
+    } catch (error) {
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to validate verification code: ${error}`);
+    }
+};
+
+// Delete one
+export const removeVerificationCode = async (codeId: string): Promise<void> => {
+    try {
+        // destructure error from the response
+        const { error } = await supabase
+            .from('verification_codes') // table name
+            .delete() // specify delete the record
+            .eq('id', codeId); // filter to id equals codeId
 
     } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to validate validation code: ${error}`);
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to remove code: ${error}`);
     }
-}
-// Delete one
-export const remove = async (codeId: string): Promise<void> => {
-    try {
-        await rtdb.ref(`verification_codes/${codeId}`).remove();
-    } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to remove code: ${error}`);
-    }
-}
-// Delete all
+};
+
+// Delete all expired
 export const removeAllExpired = async (): Promise<void> => {
     try {
-        // Get the time and retrive the codes
         const now = new Date().toISOString();
-        const snapshot = await rtdb.ref(`verification_codes`).once("value");
+        const { error } = await supabase
+            .from('verification_codes')
+            .delete()
+            .lt('expired_at', now);
 
-        if (!snapshot.exists()) return;
-
-        // Process the code
-        // Create an objects to create all the paths
-        const codes = snapshot.val();
-        const updates: { [path: string]: null } = {};
-
-        // Loop through the verification codes
-        Object.keys(codes).forEach(key => {
-            if (codes[key].expiredAt < now) {
-                updates[`verification_codes/${key}`] = null;
-            }
-        })
-
-        // Bulk updates
-        if (Object.keys(updates).length > 0) {
-            await rtdb.ref().update(updates);
-        }
+        
     } catch (error) {
-        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to remove expired code: ${error}`);
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Failed to remove expired codes: ${error}`);
     }
-}
+};
 
 export default {
-    create,
+    createVerificationCode,
     getById,
-    getAll,
-    validate,
-    remove,
+    getAllVerificationCodes,
+    validateVerificationCode,
+    removeVerificationCode,
     removeAllExpired
-}
+};

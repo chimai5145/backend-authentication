@@ -1,6 +1,8 @@
 import createHttpError from "http-errors";
-import UserModel from "../models/user.model"
+import { getUserByEmail, createUser } from "../models";
 import { CONFLICT } from "../config/http";
+import { createVerificationCode } from "../models/verificationCode.model";
+import VerificationCodeType from "../config/verificationCode.config";
 
 export type CreateAccountParams = {
     email: string,
@@ -10,19 +12,27 @@ export type CreateAccountParams = {
 
 export const createAccount = async (data: CreateAccountParams) => {
     // Verify existing account
-    const existingUser = await UserModel.getUserByEmail(data.email);
+    const existingUser = await getUserByEmail(data.email);
     if (existingUser) throw createHttpError(CONFLICT, "User already exist");
 
-    // If not create user
-    const newUser = await UserModel.createUser({
+    // Create user
+    const result = await createUser({
         email: data.email,
         password: data.password,
         verified: false,
     });
-    
+
     // Create verification code
-    // Send verifycation email
+    const verificationCode = await createVerificationCode(
+        result.id,
+        VerificationCodeType.EmailVerification,
+        Date.now() + 60 * 60 * 1000 // one hour from created time
+    );
+
+    // Send verification email
+
     // Create session
-    // Acsess token and refresh token
+    
+    // Access token and refresh token
     // Return user token
 }
