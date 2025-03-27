@@ -78,4 +78,62 @@ export const getAll = async (userId: string, type: VerificationCodeType): Promis
 }
 
 // Check if valid
-// Delete
+export const validate = async (codeId: string): Promise<boolean> => {
+    try {
+        const code = await getById(codeId);
+
+        if (!code) return false;
+
+        const expireTime = new Date(code.expiredAt);
+        return expireTime > new Date;
+
+    } catch (error) {
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to validate validation code: ${error}`);
+    }
+}
+// Delete one
+export const remove = async (codeId: string): Promise<void> => {
+    try {
+        await rtdb.ref(`verification_codes/${codeId}`).remove();
+    } catch (error) {
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to remove code: ${error}`);
+    }
+}
+// Delete all
+export const removeAllExpired = async (): Promise<void> => {
+    try {
+        // Get the time and retrive the codes
+        const now = new Date().toISOString();
+        const snapshot = await rtdb.ref(`verification_codes`).once("value");
+
+        if (!snapshot.exists()) return;
+
+        // Process the code
+        // Create an objects to create all the paths
+        const codes = snapshot.val();
+        const updates: { [path: string]: null } = {};
+
+        // Loop through the verification codes
+        Object.keys(codes).forEach(key => {
+            if (codes[key].expiredAt < now) {
+                updates[`verification_codes/${key}`] = null;
+            }
+        })
+
+        // Bulk updates
+        if (Object.keys(updates).length > 0) {
+            await rtdb.ref().update(updates);
+        }
+    } catch (error) {
+        throw createHttpError(INTERNAL_SERVER_ERROR, `Fail to remove expired code: ${error}`);
+    }
+}
+
+export default {
+    create,
+    getById,
+    getAll,
+    validate,
+    remove,
+    removeAllExpired
+}
